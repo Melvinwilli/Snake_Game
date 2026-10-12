@@ -1,0 +1,308 @@
+<h1>How To Deploy Web To Vercel</h1>
+<p>by : Melvin</p>
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Ular Sederhana + Mode Bot</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+        }
+
+        h1 {
+            color: #333;
+            margin: 0 0 10px 0;
+        }
+
+        .skor-container {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #555;
+        }
+
+        .kontrol-panel {
+            margin-bottom: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            padding: 8px 16px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            border: 2px solid #333;
+            background-color: #fff;
+            border-radius: 4px;
+            transition: 0.2s;
+        }
+
+        button:hover {
+            background-color: #333;
+            color: #fff;
+        }
+
+        button.aktif {
+            background-color: #4CAF50;
+            color: white;
+            border-color: #4CAF50;
+        }
+
+        canvas {
+            background-color: #222;
+            border: 4px solid #333;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        .petunjuk {
+            margin-top: 15px;
+            color: #777;
+            font-size: 14px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1>Game Ular</h1>
+    <div class="skor-container">Skor: <span id="skor">0</span></div>
+
+    <div class="kontrol-panel">
+        <button id="btnStart" onclick="mulaiPermainan()">Mulai Game</button>
+        <button id="btnBot" onclick="toggleModeBot()">Mode Bot: Mati</button>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+
+    <div class="petunjuk" id="teksPetunjuk">Press "Start Game" to play!</div>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+        const skorElemen = document.getElementById("skor");
+        const btnStart = document.getElementById("btnStart");
+        const btnBot = document.getElementById("btnBot");
+        const teksPetunjuk = document.getElementById("teksPetunjuk");
+
+        const ukuranKotak = 20;
+        const jumlahKotak = canvas.width / ukuranKotak;
+
+        let ular = [{x: 10, y: 10}];
+        let makanan = {x: 5, y: 5};
+        let dx = 0;
+        let dy = 0;
+        let skor = 0;
+
+        let gameBerjalan = false;
+        let modeBot = false;
+        let gameLoopId = null;
+
+        document.addEventListener("keydown", ubahArah);
+
+        // Gambar kondisi awal di layar
+        function renderAwal() {
+            bersihkanCanvas();
+            gambarMakanan();
+            gambarUlar();
+        }
+        renderAwal();
+
+        function mulaiPermainan() {
+            if (gameBerjalan) {
+                resetGame();
+                renderAwal();
+                btnStart.innerText = "Start Game";
+                gameBerjalan = false;
+                teksPetunjuk.innerText = "Game reseted. Press 'Start Game' again.";
+                return;
+            }
+
+            resetGame();
+            gameBerjalan = true;
+            btnStart.innerText = "Reset Game";
+
+            if (!modeBot) {
+                dx = 1; dy = 0;
+                teksPetunjuk.innerText = "Use arrow button (⬆️ ⬇️ ⬅️ ➡️) to move.";
+            } else {
+                teksPetunjuk.innerText = "Bot is controlling the game now...";
+            }
+
+            loopGame();
+        }
+
+        function loopGame() {
+            if (!gameBerjalan) return;
+
+            if (apakahGameSelesai()) {
+                alert("Game Over! your score: " + skor);
+                btnStart.innerText = "Start Game";
+                gameBerjalan = false;
+                return;
+            }
+
+            gameLoopId = setTimeout(function () {
+                if (modeBot) {
+                    jalankanKecerdasanBot();
+                }
+
+                bersihkanCanvas();
+                gambarMakanan();
+                gerakkanUlar();
+                gambarUlar();
+
+                loopGame();
+            }, 90);
+        }
+
+        function jalankanKecerdasanBot() {
+            const kepala = ular[0];
+            let arahAman = [];
+
+            const pilihanLangkah = [
+                {x: 1, y: 0},
+                {x: -1, y: 0},
+                {x: 0, y: 1},
+                {x: 0, y: -1}
+            ];
+
+            pilihanLangkah.forEach(langkah => {
+                if (langkah.x === -dx && langkah.y === -dy) return;
+
+                let tujuX = kepala.x + langkah.x;
+                let tujuY = kepala.y + langkah.y;
+
+                if (tujuX < 0 || tujuX >= jumlahKotak || tujuY < 0 || tujuY >= jumlahKotak) return;
+
+                let tabrakTubuh = ular.some(bagian => bagian.x === tujuX && bagian.y === tujuY);
+                if (tabrakTubuh) return;
+
+                arahAman.push(langkah);
+            });
+
+            if (arahAman.length === 0) return;
+
+            let langkahTerbaik = arahAman[0];
+            let jarakTerdekat = Infinity;
+
+            arahAman.forEach(langkah => {
+                let prediksiX = kepala.x + langkah.x;
+                let prediksiY = kepala.y + langkah.y;
+                let jarak = Math.abs(prediksiX - makanan.x) + Math.abs(prediksiY - makanan.y);
+
+                if (jarak < jarakTerdekat) {
+                    jarakTerdekat = jarak;
+                    langkahTerbaik = langkah;
+                }
+            });
+
+            dx = langkahTerbaik.x;
+            dy = langkahTerbaik.y;
+        }
+
+        function toggleModeBot() {
+            modeBot = !modeBot;
+            if (modeBot) {
+                btnBot.innerText = "Mode Bot: Active";
+                btnBot.classList.add("aktif");
+                if (gameBerjalan) teksPetunjuk.innerText = "Bot is controlling the game now...";
+            } else {
+                btnBot.innerText = "Mode Bot: Unactive";
+                btnBot.classList.remove("aktif");
+                if (gameBerjalan) teksPetunjuk.innerText = "Use arrow button (⬆️ ⬇️ ⬅️ ➡️) to move.";
+            }
+        }
+
+        function bersihkanCanvas() {
+            ctx.fillStyle = "#222";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+
+        function gambarUlar() {
+            ctx.fillStyle = modeBot ? "#00BCD4" : "#4CAF50";
+            ular.forEach(bagian => {
+                ctx.fillRect(bagian.x * ukuranKotak, bagian.y * ukuranKotak, ukuranKotak - 2, ukuranKotak - 2);
+            });
+        }
+
+        function gerakkanUlar() {
+            const kepala = {x: ular[0].x + dx, y: ular[0].y + dy};
+            ular.unshift(kepala);
+
+            if (ular[0].x === makanan.x && ular[0].y === makanan.y) {
+                skor += 10;
+                skorElemen.innerText = skor;
+                acakPosisiMakanan();
+            } else {
+                ular.pop();
+            }
+        }
+
+        function ubahArah(event) {
+            if (modeBot || !gameBerjalan) return;
+
+            const TOMBOL_KIRI = 37;
+            const TOMBOL_ATAS = 38;
+            const TOMBOL_KANAN = 39;
+            const TOMBOL_BAWAH = 40;
+
+            const tombolDitekan = event.keyCode;
+            const sedangKeAtas = dy === -1;
+            const sedangKeBawah = dy === 1;
+            const sedangKeKanan = dx === 1;
+            const sedangKeKiri = dx === -1;
+
+            if (tombolDitekan === TOMBOL_KIRI && !sedangKeKanan) {dx = -1; dy = 0;}
+            if (tombolDitekan === TOMBOL_ATAS && !sedangKeBawah) {dx = 0; dy = -1;}
+            if (tombolDitekan === TOMBOL_KANAN && !sedangKeKiri) {dx = 1; dy = 0;}
+            if (tombolDitekan === TOMBOL_BAWAH && !sedangKeAtas) {dx = 0; dy = 1;}
+        }
+
+        function gambarMakanan() {
+            ctx.fillStyle = "#FF5252";
+            ctx.fillRect(makanan.x * ukuranKotak, makanan.y * ukuranKotak, ukuranKotak - 2, ukuranKotak - 2);
+        }
+
+        function acakPosisiMakanan() {
+            makanan.x = Math.floor(Math.random() * jumlahKotak);
+            makanan.y = Math.floor(Math.random() * jumlahKotak);
+
+            let makananDiTubuhUlar = ular.some(bagian => bagian.x === makanan.x && bagian.y === makanan.y);
+            if (makananDiTubuhUlar) acakPosisiMakanan();
+        }
+
+        function apakahGameSelesai() {
+            const kepala = ular[0];
+
+            for (let i = 4; i < ular.length; i++) {
+                if (ular[i].x === kepala.x && ular[i].y === kepala.y) return true;
+            }
+
+            return kepala.x < 0 || kepala.x >= jumlahKotak || kepala.y < 0 || kepala.y >= jumlahKotak;
+        }
+
+        function resetGame() {
+            clearTimeout(gameLoopId);
+            ular = [{x: 10, y: 10}];
+            makanan = {x: 5, y: 5};
+            dx = 0;
+            dy = 0;
+            skor = 0;
+            skorElemen.innerText = skor;
+        }
+    </script>
+</body>
+
+</html>
